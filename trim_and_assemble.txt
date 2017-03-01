@@ -1,0 +1,28 @@
+1. Record the commands used to do the below in a text file (.txt), exactly as run. (You can omit installation commands, or leave them in, as you wish.)
+2. Download the same 5m E. coli reads as before.
+	curl -O -L https://s3.amazonaws.com/public.ged.msu.edu/ecoli_ref-5m.fastq.gz
+
+3. Use Trimmomatic to quality filter them with parameters at the bottom of this page.
+	a. install Trimmomatic
+		sudo apt-get -y install trimmomatic
+	b. Download the TruSeq3-PE adapters:
+		wget https://anonscm.debian.org/cgit/debian-med/trimmomatic.git/plain/adapters/TruSeq3-PE.fa
+	c. Run Trimmomatic on your split reads, replacing the filenames in <xyz> with the appropriate inputs and outputs.
+
+		TrimmomaticPE <r1 input read file> <r2 input read file> \
+			<out-r1> <orphan1> out-r2> <orphan2> \
+			ILLUMINACLIP:TruSeq3-PE.fa:2:40:15 \
+			LEADING:2 TRAILING:2 \
+			SLIDINGWINDOW:4:2 \
+			MINLEN:25
+4. Run the MEGAHIT assembler on the resulting quality-filtered reads; be sure to include the single-ended reads that were trimmed by Trimmomatic.
+	a. Download MEGAHIT
+		git clone https://github.com/voutcn/megahit.git
+		cd megahit
+		make -j 4
+	b. Run the assembler
+		~/megahit/megahit --12 ecoli_ref-5m.fastq.gz -o ecoli
+
+5. Use Quast to evaluate the assembly, and compare against the results from the previous assembly (without quality filtering) - see bottom of this page for the stats I got when running the lab.
+
+Results and discussion
