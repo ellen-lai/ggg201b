@@ -1,0 +1,58 @@
+1. Record the commands used to do the below in a text file (.txt), exactly as run. (You can omit installation commands, or leave them in, as you wish.)
+2. Download the same 5m E. coli reads as before.
+	curl -O -L https://s3.amazonaws.com/public.ged.msu.edu/ecoli_ref-5m.fastq.gz
+3. Split reads
+	a. install khmer
+		pip install khmer==2.0
+	b. decompress and split reads
+		gunzip -c ecoli_ref-5m.fastq.gz | split-paired-reads.py -1 R1.fq -2 R2.fq
+3. Use Trimmomatic to quality filter split reads with parameters at the bottom of this page.
+	a. install Trimmomatic
+		sudo apt-get -y install trimmomatic
+	b. Download the TruSeq3-PE adapters (so can use as reference for ILLUMINACLIP in Trimmomatic, which cuts adapters and other Illumina-specific sequences from the read):
+		wget https://anonscm.debian.org/cgit/debian-med/trimmomatic.git/plain/adapters/TruSeq3-PE.fa
+	c. Run Trimmomatic on your split reads, replacing the filenames in <xyz> with the appropriate inputs and outputs.
+		TrimmomaticPE R1.fq R2.fq \
+			R1_trim.fq orphan1.fq R2_trim.fq orphan2.fq \
+			ILLUMINACLIP:TruSeq3-PE.fa:2:40:15 \
+			LEADING:2 TRAILING:2 \
+			SLIDINGWINDOW:4:2 \
+			MINLEN:25
+
+		(My notes, please ignore)
+		TrimmomaticPE R1.fq R2.fq \
+			R1_trim.fq orphan1.fq R2_trim.fq orphan2.fq \
+			ILLUMINACLIP:TruSeq3-PE.fa:2:40:15 \ #Cut adapter and other illumina-specific sequences from the read.
+			LEADING:2 TRAILING:2 \ # Cut bases off the start and end of a read, if below a threshold quality
+			SLIDINGWINDOW:4:2 \ #Scan the read with a 4-base wide sliding window, cutting when the average quality per base drops below 2
+			MINLEN:25 #Drop reads shorter than 25 bp
+	d. interleave R1_trim.fq and R2_trim.fq
+		interleave-reads.py R1_trim.fq R2_trim.fq > pe_trim.fq
+4. Run the MEGAHIT assembler on the resulting quality-filtered reads; be sure to include the single-ended reads that were trimmed by Trimmomatic.
+	a. Download MEGAHIT
+		git clone https://github.com/voutcn/megahit.git
+		cd megahit
+		make -j 4
+	b. Run the assembler
+		~/megahit/megahit -1 R1_trim.fq -2 R2_trim.fq -r orphan1.fq,orphan2.fq -o trim_ecoli
+		cp trim_ecoli/final.contigs.fa trim_ecoli_asm.fa
+		—-OR for interleaved reads--
+		~/megahit/megahit --12 pe_trim.fq -r orphan1.fq,orphan2.fq -o trim_ecoli_pe
+		cp trim_ecoli_pe/final.contigs.fa trim_ecoli_pe_asm.fa
+5. Use Quast to evaluate the assembly, and compare against the results from the previous assembly (without quality filtering) - see bottom of this page for the stats I got when running the lab.
+	a. install QUAST
+		cd ~/
+		git clone https://github.com/ablab/quast.git -b release_4.2
+		export PYTHONPATH=$(pwd)/quast/libs/
+	b. run QUAST on assembly from trimmed reads
+		cd ~/work
+		python2.7 ~/quast/quast.py trim_ecoli_asm.fa -o trim_ecoli_report
+		--for assembly from interleaved reads--
+		python2.7 ~/quast/quast.py trim_ecoli_pe_asm.fa -o trim_ecoli_pe_report
+		
+Results and discussion
+Compared to the assembly from the reads without quality filtering, the assembly 
+from the reads after quality filtering was not drastically different in terms of 
+the distribution of contig size and distribution. This rather underwhelming difference was
+likely because quality filtering the reads cannot magically resolve gaps between
+contigs, so the contig length distribution is identical before and after quality filtering.
